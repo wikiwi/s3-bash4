@@ -1,4 +1,6 @@
-#!/usr/bin/bash
+#!/bin/bash
+#
+# Common functions for s3 commands
 
 ##
 # Convert string to hex with max line size of 256

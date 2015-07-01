@@ -1,4 +1,6 @@
 #!/bin/bash
+#
+# Download a file from S3
 
 scriptPath=../${0%/*}
 source ${scriptPath}/lib/aws-common.sh
