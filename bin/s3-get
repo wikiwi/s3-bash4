@@ -1,0 +1,51 @@
+#!/bin/bash
+
+scriptPath=../${0%/*}
+source ${scriptPath}/lib/aws-common.sh
+
+file=tls/p12/ocsp.p12
+bucket=ca.winged.kiwi
+region="eu-central-1"
+awsKey=AKIAJA3NQIVLXMMWN2RQ
+awsSecret="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"
+
+service=s3
+timestamp=$(date -u "+%Y-%m-%d %H:%M:%S")
+isoTimestamp=$(date -ud "${timestamp}" "+%Y%m%dT%H%M%SZ")
+dateScope=$(date -ud "${timestamp}" "+%Y%m%d")
+resource="/${bucket}/${file}"
+host=$(S3RegionToEndpoint ${region})
+
+# Generate empty payload hash
+payload=""
+payloadSign=$(SHA256Hash "${payload}")
+
+# Generate canonical request
+canonicalRequest="GET
+${resource}
+
+host:${host}
+x-amz-content-sha256:${payloadSign}
+x-amz-date:${isoTimestamp}
+
+host;x-amz-content-sha256;x-amz-date
+${payloadSign}"
+
+# Generated request hash
+hashedRequest=`SHA256Hash "${canonicalRequest}"`
+
+# Generate signing data
+stringToSign="AWS4-HMAC-SHA256
+${isoTimestamp}
+${dateScope}/${region}/${service}/aws4_request
+${hashedRequest}"
+
+# Sign data
+signature=`Sign ${awsSecret} ${dateScope} ${region} ${service} "${stringToSign}"`
+
+# Curl
+curl -H "Host: ${host}" \
+  -H "x-amz-content-sha256: ${payloadSign}" \
+  -H "x-amz-date: ${isoTimestamp}" \
+  -H "Authorization: AWS4-HMAC-SHA256 Credential=${awsKey}/${dateScope}/${region}/${service}/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=${signature}" \
+  https://${host}/${bucket}/${file}
