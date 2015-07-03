@@ -4,29 +4,119 @@
 
 set -euo pipefail
 
-scriptPath=../${0%/*}
-source ${scriptPath}/lib/aws-common.sh
+readonly SCRIPT_PATH=../${0%/*}
+readonly SCRIPT_NAME="$(basename $0)"
 
-file=tls/ca.crt
-bucket=ca.winged.kiwi
-region="eu-central-1"
-awsKey=AKIAJA3NQIVLXMMWN2RQ
-awsSecret="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"
+# Includes
+source ${SCRIPT_PATH}/lib/s3-common.sh
 
-service=s3
-timestamp=$(date -u "+%Y-%m-%d %H:%M:%S")
-isoTimestamp=$(date -ud "${timestamp}" "+%Y%m%dT%H%M%SZ")
-dateScope=$(date -ud "${timestamp}" "+%Y%m%d")
-resource="/${bucket}/${file}"
-host=$(convS3RegionToEndpoint ${region})
+##
+# Print help and exit
+# Arguments:
+#   $1 int exit code
+# Output:
+#   string help
+##
+printUsageAndExitWith() {
+  printf "Usage:\n"
+  printf "  $SCRIPT_NAME [-vi] [-k key] [-s file] resource_path\n"
+  printf "  $SCRIPT_NAME -h\n"
+  printf "Example:\n"
+  printf "  $SCRIPT_NAME -k key -s secret -r eu-central-1 /bucket/file.ext\n"
+  printf "Options:\n"
+  printf "  -k,--key\tAWS Access Key ID\n"
+  printf "  -s,--secret\tfile containing AWS Secret Access Key\n"
+  printf "  -r,--region\tAWS S3 Region\n"
+  printf "  -i,--insecure\tuse http instead of https\n"
+  printf "  -v,--verbose\tverbose output\n"
+  printf "     --version\tshow version\n"
+  printf "  -h,--help\tprint this help\n"
+  exit $1
+}
 
-# Generate empty payload hash
-payload=""
-payloadSign=$(sha256hash "${payload}")
+##
+# Parse command line and set global variables
+# Arguments:
+#   $@ command line
+# Globals:
+#   AWS_ACCESS_KEY_ID     string
+#   AWS_SECRET_ACCESS_KEY string
+#   AWS_REGION            string
+#   RESOURCE_PATH         string
+#   VERBOSE               bool
+#   INSECURE              bool
+##
+parseCommandLine() {
+  # Init globals
+  AWS_REGION=${AWS_DEFAULT_REGION:-""}
+  AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-""}
+  AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-""}
+  VERBOSE=false
+  INSECURE=false
 
-# Generate canonical request
-canonicalRequest="GET
-${resource}
+  # Parse options
+  local remaining=
+  local secretKeyFile=
+  while [[ $# > 0 ]]; do
+    local key="$1"
+    case $key in
+      --version)       showVersionAndExit;;
+      -h|--help)       printUsageAndExitWith 0;;
+      -v|--verbose)    VERBOSE=true;;
+      -i|--insecure)   INSECURE=true;;
+      -r|--region)     assertArgument $@; AWS_REGION=$2; shift;;
+      -k|--key)        assertArgument $@; AWS_ACCESS_KEY_ID=$2; shift;;
+      -s|--secret)     assertArgument $@; secretKeyFile=$2; shift;;
+      -*)              err "Unknown option $1"
+                       printUsageAndExitWith $INVALID_USAGE_EXIT_CODE;;
+      *)               remaining="$remaining \"$key\"";;
+    esac
+    shift
+  done
+
+  # Set the non-parameters back into the positional parameters ($1 $2 ..)
+  eval set -- $remaining
+
+  # Read secret file if set
+  if ! [[ -z "$secretKeyFile" ]]; then
+   AWS_SECRET_ACCESS_KEY=$(processAWSSecretFile "$secretKeyFile")
+  fi
+
+  # Parse arguments
+  if [[ $# != 1 ]]; then
+    err "You need to specify the resource path to download e.g. /bucket/file.ext"
+    exit $INVALID_USAGE_EXIT_CODE
+  fi
+
+  assertResourcePath $1
+  RESOURCE_PATH="$1"
+
+  # Freeze globals
+  readonly AWS_REGION
+  readonly AWS_ACCESS_KEY_ID
+  readonly AWS_SECRET_ACCESS_KEY
+  readonly RESOURCE_PATH
+  readonly VERBOSE
+  readonly INSECURE
+}
+
+##
+# Main routine
+##
+main() {
+  parseCommandLine $@
+
+  local timestamp=$(date -u "+%Y-%m-%d %H:%M:%S")
+  local isoTimestamp=$(date -ud "${timestamp}" "+%Y%m%dT%H%M%SZ")
+  local dateScope=$(date -ud "${timestamp}" "+%Y%m%d")
+  local host=$(convS3RegionToEndpoint "${AWS_REGION}")
+
+  # Generate empty payload hash
+  local payloadSign=$(sha256hash "")
+
+  # Generate canonical request
+  local canonicalRequest="GET
+${RESOURCE_PATH}
 
 host:${host}
 x-amz-content-sha256:${payloadSign}
@@ -35,23 +125,36 @@ x-amz-date:${isoTimestamp}
 host;x-amz-content-sha256;x-amz-date
 ${payloadSign}"
 
-# Generated request hash
-hashedRequest=$(sha256hash "${canonicalRequest}")
+  # Generated request hash
+  local hashedRequest=$(sha256hash "${canonicalRequest}")
 
-# Generate signing data
-stringToSign="AWS4-HMAC-SHA256
+  # Generate signing data
+  local stringToSign="AWS4-HMAC-SHA256
 ${isoTimestamp}
-${dateScope}/${region}/${service}/aws4_request
+${dateScope}/${AWS_REGION}/s3/aws4_request
 ${hashedRequest}"
 
-# Sign data
-signature=$(sign ${awsSecret} ${dateScope} ${region} ${service} "${stringToSign}")
+  # Sign data
+  local signature=$(sign "${AWS_SECRET_ACCESS_KEY}" "${dateScope}" "${AWS_REGION}" \
+                   "s3" "${stringToSign}")
 
-# Curl
-curl --fail \
-  -H "Host: ${host}" \
-  -H "x-amz-content-sha256: ${payloadSign}" \
-  -H "x-amz-date: ${isoTimestamp}" \
-  -H "Authorization: AWS4-HMAC-SHA256 Credential=${awsKey}/${dateScope}/${region}/${service}/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=${signature}" \
-  https://${host}/${bucket}/${file}
+  local addVerbose=""
+  if [[ $VERBOSE == true ]]; then
+    addVerbose="--verbose"
+  fi
 
+  local protocol="https"
+  if [[ $INSECURE == false ]]; then
+    protocol="http"
+  fi
+
+  # Curl
+  curl --fail $addVerbose\
+    -H "Host: ${host}" \
+    -H "x-amz-content-sha256: ${payloadSign}" \
+    -H "x-amz-date: ${isoTimestamp}" \
+    -H "Authorization: AWS4-HMAC-SHA256 Credential=${AWS_ACCESS_KEY_ID}/${dateScope}/${AWS_REGION}/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=${signature}" \
+    ${protocol}://${host}${RESOURCE_PATH}
+}
+
+main $@
