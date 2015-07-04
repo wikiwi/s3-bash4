@@ -7,7 +7,7 @@ set -euo pipefail
 
 readonly SCRIPT_PATH=../${0%/*}
 readonly SCRIPT_NAME="$(basename $0)"
-readonly METHOD="GET"
+readonly METHOD="DELETE"
 
 # Includes
 source ${SCRIPT_PATH}/lib/s3-common.sh

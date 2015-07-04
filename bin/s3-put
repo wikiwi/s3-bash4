@@ -1,13 +1,13 @@
 #!/bin/bash
 #
-# Upload a file to S3
+# Download a file from S3
 # (c) 2015 Chi Vinh Le <cvl@winged.kiwi>
 
 set -euo pipefail
 
 readonly SCRIPT_PATH=../${0%/*}
 readonly SCRIPT_NAME="$(basename $0)"
-readonly METHOD="GET"
+readonly METHOD="PUT"
 
 # Includes
 source ${SCRIPT_PATH}/lib/s3-common.sh
@@ -21,19 +21,23 @@ source ${SCRIPT_PATH}/lib/s3-common.sh
 ##
 printUsageAndExitWith() {
   printf "Usage:\n"
-  printf "  $SCRIPT_NAME [-vi] [-k key] [-s file] resource_path\n"
+  printf "  $SCRIPT_NAME [--debug] [-vip] [-k key] [-s file] [-c content_type] -f file_to_upload resource_path\n"
   printf "  $SCRIPT_NAME -h\n"
   printf "Example:\n"
-  printf "  $SCRIPT_NAME -k key -s secret -r eu-central-1 /bucket/file.ext\n"
+  printf "  $SCRIPT_NAME -k key -s secret -r eu-central-1 -f file.ext -c text/plain /bucket/file.ext\n"
   printf "Options:\n"
+  printf "  -c,--content-type\tMIME content type\n"
   printf "     --debug\tEnable debugging mode\n"
+  printf "  -f,--file\tPath to file to upload\n"
   printf "  -h,--help\tPrint this help\n"
   printf "  -i,--insecure\tUse http instead of https\n"
   printf "  -k,--key\tAWS Access Key ID. Default to environment variable AWS_ACCESS_KEY_ID\n"
+  printf "  -p,--public\tGrant public read on uploaded file\n"
   printf "  -r,--region\tAWS S3 Region. Default to environment variable AWS_DEFAULT_REGION\n"
   printf "  -s,--secret\tFile containing AWS Secret Access Key. If not set, secret will be environment variable AWS_SECRET_ACCESS_KEY\n"
   printf "  -v,--verbose\tVerbose output\n"
   printf "     --version\tShow version\n"
+
   exit $1
 }
 
@@ -41,11 +45,12 @@ printUsageAndExitWith() {
 # Parse command line and set global variables
 # Arguments:
 #   $@ command line
-# Globals:
+# Sets the following Globals:
 #   AWS_ACCESS_KEY_ID     string
 #   AWS_SECRET_ACCESS_KEY string
 #   AWS_REGION            string
 #   RESOURCE_PATH         string
+#   FILE_TO_UPLOAD        string
 #   VERBOSE               bool
 #   INSECURE              bool
 ##
@@ -54,6 +59,9 @@ parseCommandLine() {
   AWS_REGION=${AWS_DEFAULT_REGION:-""}
   AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-""}
   AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-""}
+  FILE_TO_UPLOAD=
+  CONTENT_TYPE=
+  PUBLISH=false
   VERBOSE=false
   INSECURE=false
   DEBUG=false
@@ -64,17 +72,20 @@ parseCommandLine() {
   while [[ $# > 0 ]]; do
     local key="$1"
     case $key in
-      --version)       showVersionAndExit;;
-      --debug)         DEBUG=true;;
-      -h|--help)       printUsageAndExitWith 0;;
-      -v|--verbose)    VERBOSE=true;;
-      -i|--insecure)   INSECURE=true;;
-      -r|--region)     assertArgument $@; AWS_REGION=$2; shift;;
-      -k|--key)        assertArgument $@; AWS_ACCESS_KEY_ID=$2; shift;;
-      -s|--secret)     assertArgument $@; secretKeyFile=$2; shift;;
-      -*)              err "Unknown option $1"
-                       printUsageAndExitWith $INVALID_USAGE_EXIT_CODE;;
-      *)               remaining="$remaining \"$key\"";;
+      --version)          showVersionAndExit;;
+      --debug)            DEBUG=true;;
+      -h|--help)          printUsageAndExitWith 0;;
+      -v|--verbose)       VERBOSE=true;;
+      -i|--insecure)      INSECURE=true;;
+      -p|--publish)       PUBLISH=true;;
+      -c|--content-type)  assertArgument $@; CONTENT_TYPE=$2; shift;;
+      -f|--file)          assertArgument $@; FILE_TO_UPLOAD=$2; shift;;
+      -r|--region)        assertArgument $@; AWS_REGION=$2; shift;;
+      -k|--key)           assertArgument $@; AWS_ACCESS_KEY_ID=$2; shift;;
+      -s|--secret)        assertArgument $@; secretKeyFile=$2; shift;;
+      -*)                 err "Unknown option $1"
+                          printUsageAndExitWith $INVALID_USAGE_EXIT_CODE;;
+      *)                  remaining="$remaining \"$key\"";;
     esac
     shift
   done
@@ -89,11 +100,17 @@ parseCommandLine() {
 
   # Parse arguments
   if [[ $# != 1 ]]; then
-    err "You need to specify the resource path to download e.g. /bucket/file.ext"
+    err "You need to specify the resource path to upload to e.g. /bucket/file.ext"
     printUsageAndExitWith $INVALID_USAGE_EXIT_CODE
   fi
 
-  assertResourcePath "$1"
+  if [[ -z "$FILE_TO_UPLOAD" ]]; then
+    err "You need to specify the file to upload using -f"
+    printUsageAndExitWith $INVALID_USAGE_EXIT_CODE
+  fi
+
+  assertFileExists "$FILE_TO_UPLOAD"
+  assertResourcePath $1
   RESOURCE_PATH="$1"
 
   # Freeze globals
@@ -101,6 +118,8 @@ parseCommandLine() {
   readonly AWS_ACCESS_KEY_ID
   readonly AWS_SECRET_ACCESS_KEY
   readonly RESOURCE_PATH
+  readonly CONTENT_TYPE
+  readonly PUBLISH
   readonly DEBUG
   readonly VERBOSE
   readonly INSECURE

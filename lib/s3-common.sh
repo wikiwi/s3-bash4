@@ -1,6 +1,7 @@
 #!/bin/bash
 #
 # Common functions for s3 commands
+# (c) 2015 Chi Vinh Le <cvl@winged.kiwi>
 
 # Constants
 readonly VERSION="0.1"
@@ -8,8 +9,7 @@ readonly VERSION="0.1"
 # Exit codes
 readonly INVALID_USAGE_EXIT_CODE=1
 readonly INVALID_USER_DATA_EXIT_CODE=2
-readonly INTERNAL_ERROR_EXIT_CODE=3
-readonly INVALID_ENVIRONMENT_EXIT_CODE=4
+readonly INVALID_ENVIRONMENT_EXIT_CODE=3
 
 ##
 # Write error to stderr
@@ -33,7 +33,7 @@ showVersionAndExit() {
 # Helper for parsing the command line.
 ##
 assertArgument() {
-  if [[ $# < 2 ]]; then
+  if [[ $# -lt 2 ]]; then
     err "Option $1 needs an argument."
     exit $INVALID_USAGE_EXIT_CODE
   fi
@@ -49,6 +49,32 @@ assertResourcePath() {
     err "Resource should start with / e.g. /bucket/file.ext"
     exit $INVALID_USAGE_EXIT_CODE
   fi
+}
+
+##
+# Asserts given file exists.
+# Arguments:
+#   $1 string file path
+##
+assertFileExists() {
+  if [[ ! -f $1 ]]; then
+    err "$1 file doesn't exists"
+    exit $INVALID_USER_DATA_EXIT_CODE
+  fi
+}
+
+##
+# Check for valid environment. Exit if invalid.
+##
+checkEnvironment()
+{
+  programs=(openssl curl printf echo sed awk xxd date shasum)
+  for program in "${programs[@]}"; do
+    if [ ! -x "$(which $program)" ]; then
+      err "$program is required to run"
+      exit $INVALID_ENVIRONMENT_EXIT_CODE
+    fi
+  done
 }
 
 ##
@@ -86,21 +112,33 @@ processAWSSecretFile() {
 # Arguments:
 #   $1 string to convert
 # Returns:
-#   hex string
+#   string hex
 ##
 hex256() {
   printf "$1" | xxd -p -c 256
 }
 
 ##
-# Convert string to sha256 hash
+# Calculate sha256 hash
 # Arguments:
-#   $1 string to convert
+#   $1 string to hash
 # Returns:
-#   hash string
+#   string hash
 ##
-sha256hash() {
+sha256Hash() {
   local output=$(printf "$1" | shasum -a 256)
+  echo "${output%% *}"
+}
+
+##
+# Calculate sha256 hash of file
+# Arguments:
+#   $1 file path
+# Returns:
+#   string hash
+##
+sha256HashFile() {
+  local output=$(shasum -a 256 $1)
   echo "${output%% *}"
 }
 
@@ -110,7 +148,7 @@ sha256hash() {
 #   $1 signing key in hex
 #   $2 string data to sign
 # Returns:
-#   signature
+#   string signature
 ##
 hmac_sha256() {
   printf "$2" | openssl dgst -binary -hex -sha256 -mac HMAC -macopt hexkey:$1 \
@@ -148,5 +186,109 @@ convS3RegionToEndpoint() {
     *) echo s3-${1}.amazonaws.com
       ;;
     esac
+}
+
+##
+# Perform request to S3
+# Uses the following Globals:
+#   METHOD                string
+#   AWS_ACCESS_KEY_ID     string
+#   AWS_SECRET_ACCESS_KEY string
+#   AWS_REGION            string
+#   RESOURCE_PATH         string
+#   FILE_TO_UPLOAD        string
+#   CONTENT_TYPE          string
+#   PUBLISH               bool
+#   DEBUG                 bool
+#   VERBOSE               bool
+#   INSECURE              bool
+##
+performRequest() {
+  local timestamp=$(date -u "+%Y-%m-%d %H:%M:%S")
+  local isoTimestamp=$(date -ud "${timestamp}" "+%Y%m%dT%H%M%SZ")
+  local dateScope=$(date -ud "${timestamp}" "+%Y%m%d")
+  local host=$(convS3RegionToEndpoint "${AWS_REGION}")
+
+  # Generate payload hash
+  if [[ $METHOD == "PUT" ]]; then
+    local payloadHash=$(sha256HashFile $FILE_TO_UPLOAD)
+  else
+    local payloadHash=$(sha256Hash "")
+  fi
+
+  local cmd=("curl")
+  local headers=
+  local headerList=
+
+  if [[ ${DEBUG} != true ]]; then
+    cmd+=("--fail")
+  fi
+
+  if [[ ${VERBOSE} == true ]]; then
+    cmd+=("--verbose")
+  fi
+
+  if [[ ${METHOD} == "PUT" ]]; then
+    cmd+=("-T" "${FILE_TO_UPLOAD}")
+  fi
+  cmd+=("-X" "${METHOD}")
+
+  if [[ ${METHOD} == "PUT" && ! -z "${CONTENT_TYPE}" ]]; then
+    cmd+=("-H" "Content-Type: ${CONTENT_TYPE}")
+    headers+="content-type:${CONTENT_TYPE}\n"
+    headerList+="content-type;"
+  fi
+
+  cmd+=("-H" "Host: ${host}")
+  headers+="host:${host}\n"
+  headerList+="host;"
+
+  if [[ ${METHOD} == "PUT" && "${PUBLISH}" == true ]]; then
+    cmd+=("-H" "x-amz-acl: public-read")
+    headers+="x-amz-acl:public-read\n"
+    headerList+="x-amz-acl;"
+  fi
+
+  cmd+=("-H" "x-amz-content-sha256: ${payloadHash}")
+  headers+="x-amz-content-sha256:${payloadHash}\n"
+  headerList+="x-amz-content-sha256;"
+
+  cmd+=("-H" "x-amz-date: ${isoTimestamp}")
+  headers+="x-amz-date:${isoTimestamp}"
+  headerList+="x-amz-date"
+
+  # Generate canonical request
+  local canonicalRequest="${METHOD}
+${RESOURCE_PATH}
+
+${headers}
+
+${headerList}
+${payloadHash}"
+
+  # Generated request hash
+  local hashedRequest=$(sha256Hash "${canonicalRequest}")
+
+  # Generate signing data
+  local stringToSign="AWS4-HMAC-SHA256
+${isoTimestamp}
+${dateScope}/${AWS_REGION}/s3/aws4_request
+${hashedRequest}"
+
+  # Sign data
+  local signature=$(sign "${AWS_SECRET_ACCESS_KEY}" "${dateScope}" "${AWS_REGION}" \
+                   "s3" "${stringToSign}")
+
+  local authorizationHeader="AWS4-HMAC-SHA256 Credential=${AWS_ACCESS_KEY_ID}/${dateScope}/${AWS_REGION}/s3/aws4_request, SignedHeaders=${headerList}, Signature=${signature}"
+  cmd+=("-H" "Authorization: ${authorizationHeader}")
+
+  local protocol="https"
+  if [[ $INSECURE == false ]]; then
+    protocol="http"
+  fi
+  cmd+=("${protocol}://${host}${RESOURCE_PATH}")
+
+  # Curl
+  "${cmd[@]}"
 }
 
