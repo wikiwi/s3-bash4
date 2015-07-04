@@ -1,6 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
-# Common functions for s3 commands
+# Common functions for s3-bash4 commands
 # (c) 2015 Chi Vinh Le <cvl@winged.kiwi>
 
 # Constants
@@ -68,7 +68,7 @@ assertFileExists() {
 ##
 checkEnvironment()
 {
-  programs=(openssl curl printf echo sed awk xxd date shasum)
+  programs=(openssl curl printf echo sed awk xxd date shasum pwd dirname)
   for program in "${programs[@]}"; do
     if [ ! -x "$(which $program)" ]; then
       err "$program is required to run"
