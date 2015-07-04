@@ -1,6 +1,8 @@
 # s3-bash4
 
-_s3-bash4_ is a small collection of Bash scripts to do simple interaction with _Amazon S3_ using [AWS Signature Version 4](http://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html). The advantage of using _s3-bash4_ is that it's extremly lightweight and easy to setup. No need to setup _Python_, _Java_, _Ruby_ and co.
+_s3-bash4_ is a small collection of _Bash_ scripts to do simple interaction with _Amazon S3_ using [AWS Signature Version 4](http://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html). The advantage of using _s3-bash4_ is that it's extremly lightweight and easy to setup. No need to setup _Python_, _Java_, _Ruby_ and co.
+
+This is inspired by the discontinued [s3-bash](https://github.com/cosmin/s3-bash) from _cosmin_. I was in need of a _Bash_ version that supports the newer _AWS Signature Version 4_.
 
 ### Usage
     # Get file from bucket:
