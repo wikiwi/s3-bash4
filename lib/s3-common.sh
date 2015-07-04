@@ -4,7 +4,7 @@
 # (c) 2015 Chi Vinh Le <cvl@winged.kiwi>
 
 # Constants
-readonly VERSION="0.1"
+readonly VERSION="0.0.1"
 
 # Exit codes
 readonly INVALID_USAGE_EXIT_CODE=1
