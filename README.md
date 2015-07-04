@@ -13,13 +13,13 @@ _s3-bash4_ is a small collection of Bash scripts to do simple interaction with _
     s3-delete -k {accesskey} -s /{path}/{secretid} -r {region} /{bucketname}/{filename}
 
 ### Environment Variables
-  - AWS_DEFAULT_REGION will be used as the default AWS Region
-  - AWS_ACCESS_KEY_ID will be used as the default AWS Key ID
-  - AWS_SECRET_ACCESS_KEY will be used as the default AWS Secret Access Key
+  - `AWS_DEFAULT_REGION` will be used as the default _AWS Region_
+  - `AWS_ACCESS_KEY_ID` will be used as the default _AWS Key ID_
+  - `AWS_SECRET_ACCESS_KEY` will be used as the default _AWS Secret Access Key_
 
 ### Requirements
-  - OpenSSL
-  - cUrl
+  - _OpenSSL_
+  - _cUrl_
 
 ### License
-Apache License Version 2.0
+_Apache License Version 2.0_
