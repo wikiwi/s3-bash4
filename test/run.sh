@@ -117,7 +117,7 @@ main() {
   export AWS_SECRET_ACCESS_KEY
 
   echo "Upload test file to $RESOURCE_PATH"
-  "${put}" -f "${testfile}" "${RESOURCE_PATH}"
+  "${put}" -T "${testfile}" "${RESOURCE_PATH}"
 
   echo "Download test file $RESOURCE_PATH"
   "${get}" "${RESOURCE_PATH}"

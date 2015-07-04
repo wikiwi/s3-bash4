@@ -33,20 +33,20 @@ source ${PROJECT_PATH}/lib/s3-common.sh
 ##
 printUsageAndExitWith() {
   printf "Usage:\n"
-  printf "  ${SCRIPT_NAME} [--debug] [-vip] [-k key] [-r region] [-s file] [-c content_type] -f file_to_upload resource_path\n"
+  printf "  ${SCRIPT_NAME} [--debug] [-vip] [-k key] [-r region] [-s file] [-c content_type] -T file_to_upload resource_path\n"
   printf "  ${SCRIPT_NAME} -h\n"
   printf "Example:\n"
-  printf "  ${SCRIPT_NAME} -k key -s secret -r eu-central-1 -f file.ext -c text/plain /bucket/file.ext\n"
+  printf "  ${SCRIPT_NAME} -k key -s secret -r eu-central-1 -T file.ext -c text/plain /bucket/file.ext\n"
   printf "Options:\n"
   printf "  -c,--content-type\tMIME content type\n"
   printf "     --debug\tEnable debugging mode\n"
-  printf "  -f,--file\tPath to file to upload\n"
   printf "  -h,--help\tPrint this help\n"
   printf "  -i,--insecure\tUse http instead of https\n"
   printf "  -k,--key\tAWS Access Key ID. Default to environment variable AWS_ACCESS_KEY_ID\n"
   printf "  -p,--public\tGrant public read on uploaded file\n"
   printf "  -r,--region\tAWS S3 Region. Default to environment variable AWS_DEFAULT_REGION\n"
   printf "  -s,--secret\tFile containing AWS Secret Access Key. If not set, secret will be environment variable AWS_SECRET_ACCESS_KEY\n"
+  printf "  -T,--upload-file\tPath to file to upload\n"
   printf "  -v,--verbose\tVerbose output\n"
   printf "     --version\tShow version\n"
 
@@ -95,7 +95,7 @@ parseCommandLine() {
       -i|--insecure)      INSECURE=true;;
       -p|--publish)       PUBLISH=true;;
       -c|--content-type)  assertArgument $@; CONTENT_TYPE=$2; shift;;
-      -f|--file)          assertArgument $@; FILE_TO_UPLOAD=$2; shift;;
+      -T|--upload-file)   assertArgument $@; FILE_TO_UPLOAD=$2; shift;;
       -r|--region)        assertArgument $@; AWS_REGION=$2; shift;;
       -k|--key)           assertArgument $@; AWS_ACCESS_KEY_ID=$2; shift;;
       -s|--secret)        assertArgument $@; secretKeyFile=$2; shift;;
@@ -124,7 +124,7 @@ parseCommandLine() {
   RESOURCE_PATH="$1"
 
   if [[ -z "${FILE_TO_UPLOAD}" ]]; then
-    err "You need to specify the file to upload using -f"
+    err "You need to specify the file to upload using -T"
     printUsageAndExitWith ${INVALID_USAGE_EXIT_CODE}
   fi
   assertFileExists "${FILE_TO_UPLOAD}"
