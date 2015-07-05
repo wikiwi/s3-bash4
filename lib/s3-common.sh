@@ -68,7 +68,7 @@ assertFileExists() {
 ##
 checkEnvironment()
 {
-  programs=(openssl curl printf echo sed awk xxd date shasum pwd dirname)
+  programs=(openssl curl printf echo sed awk od date shasum pwd dirname)
   for program in "${programs[@]}"; do
     if [ ! -x "$(which $program)" ]; then
       err "$program is required to run"
@@ -115,7 +115,7 @@ processAWSSecretFile() {
 #   string hex
 ##
 hex256() {
-  printf "$1" | xxd -p -c 256
+  printf "$1" | od -A n -t x1 | sed ':a;N;$!ba;s/[\n ]//g'
 }
 
 ##
