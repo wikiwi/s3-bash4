@@ -15,9 +15,12 @@ This is inspired by the discontinued [_s3-bash_](https://github.com/cosmin/s3-ba
     s3-delete -k {accesskey} -s /{path}/{secretid} -r {region} /{bucketname}/{filename}
 
 ### Environment Variables
-  - `AWS_DEFAULT_REGION` will be used as the default _AWS Region_
-  - `AWS_ACCESS_KEY_ID` will be used as the default _AWS Key ID_
-  - `AWS_SECRET_ACCESS_KEY` will be used as the default _AWS Secret Access Key_
+
+Variable               | Description
+---------------------- | -----------------------------------------------------------
+`AWS_ACCESS_KEY_ID`    | Default _AWS Access Key ID_
+`AWS_SECRET_ACCESS_KEY`| Default _AWS Secret Access Key_
+`AWS_DEFAULT_REGION`   | Default _AWS S3 Region_
 
 ### Requirements
   - _OpenSSL_
