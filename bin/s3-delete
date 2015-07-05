@@ -17,7 +17,7 @@
 
 set -euo pipefail
 
-readonly PROJECT_PATH=$(dirname $(pwd))
+readonly PROJECT_PATH=$( cd $(dirname $0) ; cd ../; pwd -P )
 readonly SCRIPT_NAME="$(basename $0)"
 readonly METHOD="DELETE"
 
