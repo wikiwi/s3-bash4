@@ -68,13 +68,23 @@ assertFileExists() {
 ##
 checkEnvironment()
 {
-  programs=(openssl curl printf echo sed awk od date shasum pwd dirname)
+  programs=(openssl curl printf echo sed awk od date pwd dirname)
   for program in "${programs[@]}"; do
     if [ ! -x "$(which $program)" ]; then
       err "$program is required to run"
       exit $INVALID_ENVIRONMENT_EXIT_CODE
     fi
   done
+  if [ ! -x "$(which sha256sum)" ]; then
+    if [ ! -x "$(which shasum)" ]; then
+      err "sha256sum or shasum is required to run"
+      exit $INVALID_ENVIRONMENT_EXIT_CODE
+    else
+      SHACMD="shasum -a 256 "
+    fi
+  else
+    SHACMD="sha256sum "
+  fi
 }
 
 ##
@@ -126,7 +136,7 @@ hex256() {
 #   string hash
 ##
 sha256Hash() {
-  local output=$(printf "$1" | shasum -a 256)
+  local output=$(printf "$1" | $SHACMD)
   echo "${output%% *}"
 }
 
@@ -138,7 +148,7 @@ sha256Hash() {
 #   string hash
 ##
 sha256HashFile() {
-  local output=$(shasum -a 256 $1)
+  local output=$($SHACMD $1)
   echo "${output%% *}"
 }
 
@@ -291,4 +301,3 @@ ${hashedRequest}"
   # Curl
   "${cmd[@]}"
 }
-
