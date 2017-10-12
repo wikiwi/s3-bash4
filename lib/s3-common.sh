@@ -257,6 +257,12 @@ performRequest() {
   headers+="x-amz-date:${isoTimestamp}"
   headerList+="x-amz-date"
 
+  if [[ -n "${AWS_SECURITY_TOKEN}" ]]; then
+    cmd+=("-H" "x-amz-security-token: ${AWS_SECURITY_TOKEN}")
+    headers+="\nx-amz-security-token:${AWS_SECURITY_TOKEN}"
+    headerList+=";x-amz-security-token"
+  fi
+
   # Generate canonical request
   local canonicalRequest="${METHOD}
 ${RESOURCE_PATH}

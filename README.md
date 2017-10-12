@@ -21,6 +21,7 @@ Variable               | Description
 `AWS_ACCESS_KEY_ID`    | Default _AWS Access Key ID_
 `AWS_SECRET_ACCESS_KEY`| Default _AWS Secret Access Key_
 `AWS_DEFAULT_REGION`   | Default _AWS S3 Region_
+`AWS_SECURITY_TOKEN`   | Default _AWS Security Token for temporary credentials_
 
 ### Requirements
   - _OpenSSL_
