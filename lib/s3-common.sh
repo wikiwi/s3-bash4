@@ -283,7 +283,7 @@ ${hashedRequest}"
   cmd+=("-H" "Authorization: ${authorizationHeader}")
 
   local protocol="https"
-  if [[ $INSECURE == false ]]; then
+  if [[ $INSECURE == true ]]; then
     protocol="http"
   fi
   cmd+=("${protocol}://${host}${RESOURCE_PATH}")
