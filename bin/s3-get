@@ -44,6 +44,7 @@ printUsageAndExitWith() {
   printf "  -k,--key\tAWS Access Key ID. Default to environment variable AWS_ACCESS_KEY_ID\n"
   printf "  -r,--region\tAWS S3 Region. Default to environment variable AWS_DEFAULT_REGION\n"
   printf "  -s,--secret\tFile containing AWS Secret Access Key. If not set, secret will be environment variable AWS_SECRET_ACCESS_KEY\n"
+  printf "  -t,--token\tSecurity token for temporary credentials. If not set, token will be environment variable AWS_SECURITY_TOKEN\n"
   printf "  -v,--verbose\tVerbose output\n"
   printf "     --version\tShow version\n"
   exit $1
@@ -57,6 +58,7 @@ printUsageAndExitWith() {
 #   AWS_ACCESS_KEY_ID     string
 #   AWS_SECRET_ACCESS_KEY string
 #   AWS_REGION            string
+#   AWS_SECURITY_TOKEN    string
 #   RESOURCE_PATH         string
 #   VERBOSE               bool
 #   INSECURE              bool
@@ -67,6 +69,7 @@ parseCommandLine() {
   AWS_REGION=${AWS_DEFAULT_REGION:-""}
   AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-""}
   AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-""}
+  AWS_SECURITY_TOKEN=${AWS_SECURITY_TOKEN:-""}
   VERBOSE=false
   INSECURE=false
   DEBUG=false
@@ -85,6 +88,7 @@ parseCommandLine() {
       -r|--region)     assertArgument $@; AWS_REGION=$2; shift;;
       -k|--key)        assertArgument $@; AWS_ACCESS_KEY_ID=$2; shift;;
       -s|--secret)     assertArgument $@; secretKeyFile=$2; shift;;
+      -t|--token)      assertArgument $@; AWS_SECURITY_TOKEN=$2; shift;;
       -*)              err "Unknown option $1"
                        printUsageAndExitWith ${INVALID_USAGE_EXIT_CODE};;
       *)               remaining="${remaining} \"${key}\"";;
