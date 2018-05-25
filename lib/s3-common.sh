@@ -45,7 +45,7 @@ assertArgument() {
 #   $1 string resource path
 ##
 assertResourcePath() {
-  if [[ $1 = !(/*) ]]; then
+  if [[ $1 =~ !(/*) ]]; then
     err "Resource should start with / e.g. /bucket/file.ext"
     exit $INVALID_USAGE_EXIT_CODE
   fi
